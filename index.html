@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purdue ECE Kiosk</title>
+    <script src="assets/pdf.js"></script>
+    <script src="assets/qrcode.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+            background-color: #111;
+            transition: opacity 0.3s;
+        }
+        .faders {
+            transition: opacity 0.3s;
+        }
+        .left {
+            width: 50%;
+            padding: 3%;
+            padding-top: 0.5%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-around;
+        }
+        .right {
+            width: 50%;
+            padding: 3%;
+            padding-top: 0.5%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-around;
+        }
+        #title, #date, #author {
+            text-align: center;
+        }
+        #title, #date, .paragraph, #author {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            font-weight: lighter;
+            color: #fff;
+            font-size: xx-large;
+            margin: 0;
+        }
+        .paragraph {
+            font-size: x-large;
+            line-height: 35px;
+            text-align: justify;
+            text-justify: inter-word;
+        }
+        /* .paragraph {
+            display: none;
+        } */
+        iframe {
+            border: none;
+            width: 100%;
+            height: 100%;
+        }
+        hr {
+            width: 100%;
+            color: goldenrod;
+        }
+        progress {
+            width: 100%;
+            height: 4px;
+            background-color: rgba(218, 165, 32, 0.15);
+            border: 0;
+            -webkit-transition : width 5s ease;
+            -moz-transition : width 5s ease;
+                -o-transition : width 5s ease;
+                    transition : width 5s ease;
+        }
+        progress::-moz-progress-bar { background: rgba(218, 165, 32, 0.5); }
+        progress::-webkit-progress-value { background: rgba(218, 165, 32, 0.5); }
+        progress.flip {
+            -webkit-transform: rotateY(180deg);
+            transform: rotateY(180deg);
+        }
+        #qrcode img {
+            width: 150px;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+        .middle {
+            width: 2px;
+            background-color: rgba(218, 165, 32, 0.35);
+            height: 100%;
+        }
+        canvas, #img {
+            width: 100%;
+        }
+        .bottom {
+            width: 100%;
+            height: 3%;
+            position: absolute;
+            top: 97%;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-around;
+            background-color: rgba(218, 165, 32, 1);
+        }
+        .bottom * {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div class="left">
+        <h1 class="faders" id="title"></h1>
+        <h2 class="faders" id="date"></h2>
+        <h2 class="faders" id="author"></h2>
+        <div class="faders" id="qrcode"></div>
+        <progress class="" value="0" max="500"></progress>
+    </div>
+    <div class="middle"></div>
+    <div class="right">
+        <img id="img">
+        <canvas class="faders" id="pdf"></canvas>
+    </div>
+    <div class="bottom">
+        <p>Designed with ❤️ by HKN, Fall 2022</p>
+    </div>
+</body>
+<script>
+    function animateProgressBar() {
+        var progress = document.querySelector("progress");
+        var id = setInterval(frame, 100);
+        function frame() {
+            if (window.justStarted) {
+                setTimeout(async function () {
+                    await renderContent(window.jsondata[window.articleIndex]);
+                    Array.from(document.querySelectorAll(".faders")).forEach(e => e.style.opacity = '1');
+                    document.body.style.opacity = "1";
+                }, 300);
+                window.justStarted = false;
+            }
+            else if (progress.value == 500 || progress.value == 0) {
+                Array.from(document.querySelectorAll(".faders")).forEach(e => e.style.opacity = '0');
+                window.articleIndex = (window.articleIndex + 1) % window.jsondata.length;
+                // clearInterval(id);
+                setTimeout(async function () {
+                    await renderContent(window.jsondata[window.articleIndex]);
+                    Array.from(document.querySelectorAll(".faders")).forEach(e => e.style.opacity = '1');
+                }, 300);
+                progress.classList.toggle("flip");
+            }
+            if (progress.classList.contains("flip")) {
+                progress.value = progress.value - 1;
+            }
+            else {
+                progress.value = progress.value + 1;
+            }
+        }
+    }
+    function renderPDF(pdf) {
+        return new Promise((resolve, reject) => {
+            var url = pdf;
+            // Loaded via <script> tag, create shortcut to access PDF.js exports.
+            var pdfjsLib = window.pdfjsLib;
+            // The workerSrc property shall be specified.
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.js';
+            // Asynchronous download of PDF
+            var loadingTask = pdfjsLib.getDocument(url);
+            loadingTask.promise.then(function(pdf) {
+            console.log('PDF loaded');
+            // Fetch the first page
+            var pageNumber = 1;
+            pdf.getPage(pageNumber).then(function(page) {
+                console.log('Page loaded');
+                var scale = 1.5;
+                var viewport = page.getViewport({scale: scale});
+                // Prepare canvas using PDF page dimensions
+                var canvas = document.getElementById('pdf');
+                canvas.remove();
+                canvas = document.createElement("canvas");
+                canvas.id = "pdf";
+                canvas.classList.add("faders");
+                document.querySelector(".right").prepend(canvas);
+                var context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                // Render PDF page into canvas context
+                var renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+                var renderTask = page.render(renderContext);
+                renderTask.promise.then(function () {
+                    console.log('Page rendered');
+                });
+                resolve();
+            });
+            }, function (reason) {
+            // PDF loading error
+            console.error(reason);
+            });
+        });
+    }
+    window.img = document.querySelector("#img");
+    function renderContent(j) {
+        return new Promise (async (resolve, reject) => {
+            Array.from(document.querySelectorAll(".paragraph")).forEach(e => e.remove());
+            console.log(j);
+            document.querySelector("#title").innerHTML = j["title"];
+            document.querySelector("#date").innerHTML = j["date"];
+            document.querySelector("#author").innerHTML = j["author"];
+            var qrcodediv = document.getElementById("qrcode");
+            qrcodediv.innerHTML = "";
+            window.qrcode = new QRCode(qrcodediv, j['url']);
+            if (j["pdf"]) {
+                await renderPDF(j["pdf"]);
+                document.querySelector("#pdf").style.display = "block";
+                window.img.style.display = "none";
+            } else if (j["img"]) {
+                document.querySelector("#pdf").style.display = "none";
+                window.img.style.display = "block";
+                window.img.src = j["img"];
+            } else {
+                document.querySelector("#pdf").style.display = "none";
+                document.querySelector("#img").style.display = "none";
+            }
+            if ("paragraphs" in j) {
+                j["paragraphs"].forEach(p => {
+                    var pnode = document.createElement("p");
+                    pnode.classList.add("paragraph");
+                    pnode.classList.add("faders");
+                    pnode.innerHTML = p;
+                    document.querySelector(j["pdf"] ? ".left" : ".right").appendChild(pnode);
+                });
+            }
+            resolve();
+        });
+    }
+    document.body.style.opacity = "0";
+    Array.from(document.querySelectorAll(".faders")).forEach(e => e.style.opacity = '0');
+    window.onload = async () => {
+        var r = await fetch("scrape.cgi");
+        var j = await r.json();
+        window.jsondata = j;
+        window.articleIndex = 0;  
+        window.justStarted = true; 
+        animateProgressBar();
+    }
+</script>
+</html>
