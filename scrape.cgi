@@ -45,7 +45,6 @@ for article in articles:
     # append the object to articles
     article_dict.append(adict)
 
-# write the html to a file
 if 'REMOTE_ADDR' in os.environ:
     # we are running in CGI mode, print json header
     print("Content-Type: application/json\r\n")
