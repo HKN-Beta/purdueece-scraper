@@ -21,7 +21,31 @@
             margin: 0;
             display: flex;
             flex-direction: row;
-            height: 95vh;
+            height: 92vh;
+        }
+        .header {
+            height: 3vh;
+            border-bottom: 1px solid rgba(218, 165, 32, 0.5);
+            padding: 0 6% 0 6%;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .dot {
+            height: 1vh;
+            width: 1vh;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.25);
+            margin: 0 1% 0 1%;
+            transition: background-color 0.5s ease;
+        }
+        .dot-active {
+            height: 1vh;
+            width: 1vh;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 1);
+            margin: 0 1% 0 1%;
         }
         .faders {
             transition: opacity 0.3s;
@@ -118,6 +142,8 @@
     </style>
 </head>
 <body>
+    <div class="header">
+    </div>
     <div class="top">
         <div class="left">
             <h1 class="faders" id="title"></h1>
@@ -154,6 +180,11 @@
             }
             else if (progress.value == 500 || progress.value == 0) {
                 cycleEmoji();
+                window.dots = Array.from(document.querySelectorAll(".dot"));
+                var active = window.dots.filter(e => e.classList.contains("dot-active"));
+                window.activeDot = active[0];
+                window.activeDot.classList.remove("dot-active");
+                setTimeout(() => { window.dots[(window.dots.indexOf(window.activeDot)+1) % window.dots.length].classList.add("dot-active"); }, 250);
                 Array.from(document.querySelectorAll(".faders")).forEach(e => e.style.opacity = '0');
                 window.articleIndex = (window.articleIndex + 1) % window.jsondata.length;
                 // clearInterval(id);
@@ -234,7 +265,6 @@
     function renderContent(j) {
         return new Promise (async (resolve, reject) => {
             Array.from(document.querySelectorAll(".paragraph")).forEach(e => e.remove());
-            console.log(j);
             document.querySelector("#title").innerHTML = j["title"];
             document.querySelector("#date").innerHTML = j["date"];
             document.querySelector("#author").innerHTML = j["author"];
@@ -252,26 +282,49 @@
             } else {
                 document.querySelector("#pdf").style.display = "none";
                 document.querySelector("#img").style.display = "none";
-            }
-            if ("paragraphs" in j) {
-                j["paragraphs"].forEach(p => {
-                    var pnode = document.createElement("p");
-                    pnode.classList.add("paragraph");
-                    pnode.classList.add("faders");
-                    pnode.innerHTML = p;
-                    document.querySelector(j["pdf"] ? ".left" : ".right").appendChild(pnode);
-                });
+                if ("paragraphs" in j) {
+                    var totalLetters = 0;
+                    var stop = false;
+                    j["paragraphs"].forEach(p => {
+                        if (stop) return;
+                        totalLetters += p.length;
+                        var pnode = document.createElement("p");
+                        pnode.classList.add("paragraph");
+                        pnode.classList.add("faders");
+                        if (totalLetters > 1200) {
+                            pnode.innerHTML = "Read more by scanning the QR code on the left.";
+                            stop = true;
+                        }
+                        else
+                            pnode.innerHTML = p;
+                        document.querySelector(j["pdf"] ? ".left" : ".right").appendChild(pnode);
+                    });
+                }
             }
             resolve();
         });
     }
     Array.from(document.querySelectorAll(".faders")).forEach(e => e.style.opacity = '0');
+    // check if internet connectivity is not lost.  If not, refresh the page every 6 hours.
+    setInterval(() => {
+        if (navigator.onLine) {
+            window.location.reload();
+        }
+    }, 21600000);
     window.onload = async () => {
         var r = await fetch("scrape.cgi");
         var j = await r.json();
         window.jsondata = j;
         window.articleIndex = 0;  
         window.justStarted = true; 
+        // add dots (hopefully page keeps constant number of articles)
+        window.jsondata.forEach((e,i) => {
+            var dot = document.createElement("div");
+            if (i == 0)
+                dot.classList.add("dot-active");
+            dot.classList.add("dot");
+            document.querySelector(".header").appendChild(dot);
+        });
         animateProgressBar();
     }
 </script>
