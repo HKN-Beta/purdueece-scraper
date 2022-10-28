@@ -9,3 +9,5 @@ Libraries used:
 - qrcode.js (Client-side JS, Renders QR code for each article's URL)
 - PDF.js (Client-side JS, Renders any PDFs in article)
 
+Future plans:
+- Refactor frontend to render all objects in the background so browser doesn't waste compute time reloading PDFs and images.

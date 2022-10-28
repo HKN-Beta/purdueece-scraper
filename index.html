@@ -8,13 +8,24 @@
     <script src="assets/pdf.js"></script>
     <script src="assets/qrcode.min.js"></script>
     <style>
+        .overlay {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s;
+        }
         body {
             margin: 0;
             display: flex;
             flex-direction: column;
             background-color: #111;
             height: 100vh;
-            opacity: 0;
             transition: opacity 0.3s;
         }
         .top {
@@ -71,7 +82,7 @@
         #title, #date, #author {
             text-align: center;
         }
-        #title, #date, .paragraph, #author, .bottom * {
+        #title, #date, .paragraph, #author, .bottom *, .overlay p {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
             font-weight: 300;
             color: #fff;
@@ -80,7 +91,7 @@
         }
         .paragraph {
             font-size: calc(0.75vw + 0.725vh);
-            line-height: 30px;
+            line-height: calc(0.75vw + 1vh)N;
             text-align: justify;
             text-justify: inter-word;
         }
@@ -122,6 +133,7 @@
         }
         canvas, #img {
             width: calc(22.5vw + 22.5vh);
+            max-height: 90vh;
         }
         .bottom {
             width: 100%;
@@ -142,8 +154,8 @@
     </style>
 </head>
 <body>
-    <div class="header">
-    </div>
+    <div class="overlay"><p>Brewing coffee...</p></div>
+    <div class="header"></div>
     <div class="top">
         <div class="left">
             <h1 class="faders" id="title"></h1>
@@ -164,7 +176,7 @@
 </body>
 <script>
     window.onbeforeunload = () => {
-        document.body.style.opacity = 0;
+        document.querySelector(".faders").style.opacity = 0;
     }
     function animateProgressBar() {
         var progress = document.querySelector("progress");
@@ -174,7 +186,7 @@
                 setTimeout(async function () {
                     await renderContent(window.jsondata[window.articleIndex]);
                     Array.from(document.querySelectorAll(".faders")).forEach(e => e.style.opacity = '1');
-                    document.body.style.opacity = "1";
+                    document.querySelector(".faders").style.opacity = "1";
                 }, 300);
                 window.justStarted = false;
             }
@@ -218,19 +230,21 @@
         }
     }
     function renderPDF(pdf) {
-        return new Promise((resolve, reject) => {
-            var url = pdf;
-            // Loaded via <script> tag, create shortcut to access PDF.js exports.
-            var pdfjsLib = window.pdfjsLib;
-            // The workerSrc property shall be specified.
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.js';
-            // Asynchronous download of PDF
-            var loadingTask = pdfjsLib.getDocument(url);
-            loadingTask.promise.then(function(pdf) {
-            console.log('PDF loaded');
-            // Fetch the first page
-            var pageNumber = 1;
-            pdf.getPage(pageNumber).then(function(page) {
+        window.pdf = pdf;
+        return new Promise(async (resolve, reject) => {
+            try {
+                var url = window.pdf;
+                // Loaded via <script> tag, create shortcut to access PDF.js exports.
+                var pdfjsLib = window.pdfjsLib;
+                // The workerSrc property shall be specified.
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.js';
+                // Asynchronous download of PDF
+                var loadingTask = pdfjsLib.getDocument(url);
+                var pdf = await loadingTask.promise; //.then(function(pdf) {
+                console.log('PDF loaded');
+                // Fetch the first page
+                var pageNumber = 1;
+                var page = await pdf.getPage(pageNumber) //.then(function(page) {
                 console.log('Page loaded');
                 var scale = 1.5;
                 var viewport = page.getViewport({scale: scale});
@@ -250,15 +264,14 @@
                     viewport: viewport
                 };
                 var renderTask = page.render(renderContext);
-                renderTask.promise.then(function () {
-                    console.log('Page rendered');
-                });
+                await renderTask.promise; //.then(function () {
+                console.log('Page rendered');
                 resolve();
-            });
-            }, function (reason) {
-            // PDF loading error
-            console.error(reason);
-            });
+            }
+            catch (e) {
+                console.error(e);
+                reject(e);
+            }
         });
     }
     window.img = document.querySelector("#img");
@@ -272,13 +285,13 @@
             qrcodediv.innerHTML = "";
             window.qrcode = new QRCode(qrcodediv, j['url']);
             if (j["pdf"]) {
+                window.img.style.display = "none";
                 await renderPDF(j["pdf"]);
                 document.querySelector("#pdf").style.display = "block";
-                window.img.style.display = "none";
             } else if (j["img"]) {
-                document.querySelector("#pdf").style.display = "none";
-                window.img.style.display = "block";
                 window.img.src = j["img"];
+                window.img.style.display = "block";
+                document.querySelector("#pdf").style.display = "none";
             } else {
                 document.querySelector("#pdf").style.display = "none";
                 document.querySelector("#img").style.display = "none";
@@ -325,7 +338,45 @@
             dot.classList.add("dot");
             document.querySelector(".header").appendChild(dot);
         });
+        document.querySelector(".overlay").style.opacity = "0";
+        await new Promise ((resolve, reject) => { setTimeout(() => {
+            try {
+                document.querySelector(".overlay").style.display = "none";
+                resolve();
+            } catch(err) {
+                reject(err);
+            }
+        }, 300); });
         animateProgressBar();
     }
+    document.body.addEventListener('keydown', (event) => {
+        if (event.key == "ArrowRight" || event.key == "ArrowLeft") {
+            cycleEmoji();
+            window.dots = Array.from(document.querySelectorAll(".dot"));
+            var active = window.dots.filter(e => e.classList.contains("dot-active"));
+            window.activeDot = active[0];
+            window.activeDot.classList.remove("dot-active");
+            Array.from(document.querySelectorAll(".faders")).forEach(e => e.style.opacity = '0');
+            if (event.key == "ArrowRight") {
+                setTimeout(() => { window.dots[(window.dots.indexOf(window.activeDot)+1) % window.dots.length].classList.add("dot-active"); }, 250);
+                window.articleIndex = (window.articleIndex + 1) % window.jsondata.length;
+            }
+            else {
+                setTimeout(() => { 
+                    var prevDot = window.dots.indexOf(window.activeDot) == 0 ? window.dots.length - 1 : window.dots.indexOf(window.activeDot) - 1;
+                    window.dots[prevDot].classList.add("dot-active"); 
+                }, 250);
+                window.articleIndex = window.articleIndex == 0 ? window.jsondata.length - 1 : window.articleIndex - 1;
+            }
+            setTimeout(async function () {
+                await renderContent(window.jsondata[window.articleIndex]);
+                Array.from(document.querySelectorAll(".faders")).forEach(e => e.style.opacity = '1');
+            }, 250);
+            if (document.querySelector("progress").classList.contains("flip"))
+                document.querySelector("progress").value=499;
+            else
+                document.querySelector("progress").value=1;
+        }
+    });
 </script>
 </html>
